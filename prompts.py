@@ -1,52 +1,4 @@
-prompt_news = """You are a news query generator. Your task is to create up to 6 search queries to retrieve relevant news articles for a specified macrotopic. These queries should be designed to support the generation of a detailed and structured scenario, incorporating recent and relevant perspectives.
 
-### Key Requirements
-
-#### 1. Final Product Context
-The final product will be a scenario structured as follows:
-- Title: Summarizes the central theme
-- Executive Summary: Provides a high-level overview of key elements and uncertainties
-- Narrative: Detailed exploration integrating various analyses ("Quantum," "Entropy," etc.) and wisdom of the crowd insights
-- Thematic Analyses: Covers Political, Economic, Security, Legal, and Operational aspects
-- Implications and Uncertainties: Examines potential outcomes and critical unknowns
-
-#### 2. Query Objectives
-Generate diverse and complementary search queries to ensure comprehensive coverage of the topic.
-
-Capture the following dimensions:
-- Recent Developments: Focus on breaking news or major updates
-- Long-term analysis of the issue since its beginning
-- Diverse Perspectives: Include multiple viewpoints (e.g., geopolitical, economic, social)
-- Relevant Stakeholders: Identify actors or entities shaping the topic
-- Potential Implications: Explore consequences of key developments
-
-#### 3. Format and Output
-Return the queries in the following format:
-[
-    "Query 1",
-    "Query 2",
-    "Query 3",
-    ...
-    "Query 6"
-]
-
-### Guidelines for Query Generation
-- Specificity: Ensure queries are precise enough to return highly relevant results
-- Comprehensiveness: Design queries to capture multiple aspects of the topic
-- Diversity: Avoid overlapping queries; focus on varying dimensions of the topic
-- Scalability: The queries should collectively provide sufficient information for all thematic sections of the scenario
-
-### Example
-Topic: "Impact of Rising Energy Prices in Europe"
-[
-    "Recent developments in European energy markets",
-    "Dynamic of European energy prices in the last 10 years",
-    "Geopolitical impact of energy price surges in Europe",
-    "Effects of energy costs on European industrial output",
-    "Government responses to rising energy prices in the EU",
-    "Energy price forecasts and implications for Europe",
-    "Social unrest linked to energy affordability in Europe"
-]"""
 
 recursive_exploration_prompt = """
 You are an expert in recursively exploring complex issues, particularly in political and economic scenarios. Your task is to analyze the given topic by breaking it down into its fundamental components and examining their interrelationships. **Do not add any introductory statement like "Here is the recursive analysis...", just output the requested analysis.**
@@ -648,7 +600,7 @@ from each analytical perspective. **Do not add any introductory statement like "
     *   **Explore the "so what?"** of each finding. Don't just present information; analyze its significance for the overall scenario. What are the implications? Why does it matter?
 
 2.  **Multi-Section Structure in Paragraph Form:**
-    *   Use **clear headings** to divide your analysis into logical sections (e.g., "Introduction," "Background," "Immediate Impact," "Economic Effects," "Social Consequences," "Geopolitical Considerations," "Potential Futures," etc.).
+    *   Use **clear headings** to divide your analysis into logical sections (e.g., "Background," "Immediate Impact," "Economic Effects," "Social Consequences," "Geopolitical Considerations," "Potential Futures," etc.).
     *   Within each section, use **well-developed paragraphs** to present your analysis. Each paragraph should focus on a specific idea or aspect of the topic.
     *   **Absolutely no bullet points or enumerations.** Write in full, flowing paragraphs.
 
@@ -684,12 +636,10 @@ from each analytical perspective. **Do not add any introductory statement like "
 
 *   **Title:** (A concise and informative title summarizing the scenario)
 *   **Executive Summary:** (A brief overview of the key elements, findings, and uncertainties. No more than 200 words)
-*   **Introduction:** (Setting the stage, introducing the topic and its relevance)
 *   **Background:** (Historical context, key actors, and relevant trends)
 *   **Immediate Impact:** (Short-term consequences and initial reactions)
 *   **Economic Effects:** (Analysis of economic implications, drawing on relevant specialized analyses)
 *   **Social Consequences:** (Analysis of social impacts, considering factors like public opinion, social cohesion, etc.)
 *   **Geopolitical Considerations:** (Examining the scenario within a broader geopolitical context)
 *   **Potential Futures:** (Exploring possible future trajectories, uncertainties, and key factors that will shape the outcome. This should be the most detailed section, exploring at least 3 different potential futures)
-*   **Conclusion:** (A brief reflection of the key insights of the scenario, highlighting the most significant takeaways)
 """

@@ -4,7 +4,7 @@ import gradio as gr
 from datetime import datetime
 from graph import graph
 from nodes import AgentState
-import time
+from pdf_generator import generate_analysis_pdf
 
 # Load environment variables at the start
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -59,38 +59,60 @@ def format_actor_analysis(final_state):
 {final_state['actor_mapping_analysis']}
 """
 
+def format_humanitarian_analysis(final_state):
+    return f"""
+# Humanitarian Impact Analysis
+
+{final_state['humanitarian_impact_analysis']}
+"""
+
+def format_economic_analysis(final_state):
+    return f"""
+# Economic Impact Analysis
+
+{final_state['economic_impact_analysis']}
+"""
+
 def generate_analysis(topic: str, progress=gr.Progress()):
     if not topic:
-        return ["Please enter a topic to analyze"] * 7  # Updated number of outputs
+        return ["Please enter a topic to analyze"] * 9
 
     progress(0, desc="Initializing analysis...")
 
     # Initialize the state
-    today = datetime.now().strftime("%Y-%m-%d")
-    initial_state = AgentState(
-        topic=topic,
-        question_links=[],
-        today=today,
-        news=[],
-        complex_system_analysis="",
-        quantum_analysis="",
-        entropy_analysis="",
-        recursive_exploration_analysis="",
-        dimensional_trascendence_analysis="",
-        actor_mapping_analysis="",
-        final_analysis="",
-        revision_needed=False,
-        areas_for_improvement="",
-        research_queries=[],
-        revision_count=0
-    )
+    initial_state = {
+        "topic": str(topic),
+        "question_links": [],
+        "today": datetime.now().strftime("%Y-%m-%d"),
+        "background": [""],
+        "news": [""],
+        "complex_system_analysis": "",
+        "quantum_analysis": "",
+        "entropy_analysis": "",
+        "recursive_exploration_analysis": "",
+        "dimensional_trascendence_analysis": "",
+        "actor_mapping_analysis": "",
+        "final_analysis": "",
+        "revision_needed": False,
+        "areas_for_improvement": "",
+        "research_queries": [],
+        "humanitarian_impact_analysis": "",
+        "economic_impact_analysis": "",
+        "revision_count": 0
+    }
 
     progress(0.1, desc="Gathering news and data...")
-
-    # Run the analysis graph with increased recursion limit
     final_state = graph.invoke(initial_state, config={"recursion_limit": 50})
 
     progress(0.7, desc="Synthesizing analysis...")
+
+    # Generate PDF after analysis is complete
+    try:
+        pdf_path = generate_analysis_pdf(final_state)
+        print(f"PDF report generated and saved to: {pdf_path}")
+    except Exception as e:
+        print(f"Error generating PDF: {e}")
+        print("Analysis will continue without PDF generation")
 
     # Generate all analyses
     main_analysis = format_main_analysis(final_state, topic)
@@ -100,6 +122,8 @@ def generate_analysis(topic: str, progress=gr.Progress()):
     recursive = format_recursive_analysis(final_state)
     dimensional = format_dimensional_analysis(final_state)
     actor = format_actor_analysis(final_state)
+    humanitarian = format_humanitarian_analysis(final_state)
+    economic = format_economic_analysis(final_state)
 
     progress(1.0, desc="Analysis complete!")
 
@@ -110,7 +134,9 @@ def generate_analysis(topic: str, progress=gr.Progress()):
         entropy,
         recursive,
         dimensional,
-        actor
+        actor,
+        humanitarian,
+        economic
     ]
 
 with gr.Blocks(theme=gr.themes.Soft()) as iface:
@@ -118,6 +144,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as iface:
         """
         # Advanced Topic Analysis System
         Enter a topic to receive a comprehensive analysis using our advanced analytical frameworks.
+        A PDF report will be automatically generated in the Reports directory.
         """
     )
 
@@ -133,6 +160,10 @@ with gr.Blocks(theme=gr.themes.Soft()) as iface:
     with gr.Tabs() as tabs:
         with gr.TabItem("Main Analysis"):
             main_output = gr.Markdown()
+        with gr.TabItem("Humanitarian Impact"):
+            humanitarian_output = gr.Markdown()
+        with gr.TabItem("Economic Impact"):
+            economic_output = gr.Markdown()
         with gr.TabItem("Quantum Analysis"):
             quantum_output = gr.Markdown()
         with gr.TabItem("Complex Systems Analysis"):
@@ -156,7 +187,9 @@ with gr.Blocks(theme=gr.themes.Soft()) as iface:
             entropy_output,
             recursive_output,
             dimensional_output,
-            actor_output
+            actor_output,
+            humanitarian_output,
+            economic_output
         ]
     )
 
@@ -175,10 +208,12 @@ with gr.Blocks(theme=gr.themes.Soft()) as iface:
             entropy_output,
             recursive_output,
             dimensional_output,
-            actor_output
+            actor_output,
+            humanitarian_output,
+            economic_output
         ],
         fn=generate_analysis,
-        cache_examples=False  # Disable caching to prevent automatic execution
+        cache_examples=False
     )
 
 if __name__ == "__main__":
