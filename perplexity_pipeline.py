@@ -57,14 +57,13 @@ def news_search(query: str, recency_filter: str = "month") -> str:
     filtered by 'recency_filter'. Returns a short summary (text).
     """
     system_message = (
-        "You are a news aggregator. Summarize the most relevant news articles "
-        "for the given query as concise bullet points, focusing on headline, "
-        "date, and main takeaway."
+        "You are a a world-ckass professional analyst. You are tasked with creating highly informative brief reports with the information you retrieve online"
+        "for the given query. You focus on key data points and the key facts (with their dates) as well as their main consequences the causal relationships between them"
     )
     user_message = (
         f"Search query: {query}\n"
         f"Recency filter: {recency_filter}\n\n"
-        "Please summarize the top relevant articles."
+        "Please research the following topic: "
     )
 
     payload = {

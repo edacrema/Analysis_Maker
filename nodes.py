@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+import re
 from typing import List, TypedDict, Dict, Optional  # Import Dict from typing
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -11,11 +12,9 @@ from langchain_community.utilities import GoogleSerperAPIWrapper
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, ValidationError  
-from prompts import quantum_prompt, entropy_prompt, \
-    recursive_exploration_prompt, dimensional_transcendence_prompt, actor_mapping_prompt, \
-    complex_systems_prompt, analyst_prompt
+from prompts import entropy_prompt, actor_mapping_prompt, game_theory_prompt, complex_systems_prompt, analyst_prompt
 
-from perplexity_pipeline import news_search, generate_queries_with_perplexity
+from perplexity_pipeline import news_search
 
 # Load environment variables from .env file
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -30,11 +29,9 @@ class AgentState(TypedDict):
     background: List[str]
     news: List[str]  # Updated to store all research
     complex_system_analysis: str
-    quantum_analysis: str
     entropy_analysis: str
-    recursive_exploration_analysis: str
-    dimensional_trascendence_analysis: str
     actor_mapping_analysis: str
+    game_theory_analysis: str
     final_analysis: str  # This is the unified analysis
     revision_needed: bool
     areas_for_improvement: str
@@ -49,7 +46,7 @@ class Queries(BaseModel):
 
 genai.configure(api_key=GOOGLE_API_KEY)
 # Example chat model
-model_queries = genai.GenerativeModel(model_name='gemini-1.5-pro', generation_config = genai.types.GenerationConfig(temperature=0.2))  # Adjust the temperature as needed
+model_queries = genai.GenerativeModel(model_name='gemini-1.5-pro', generation_config = genai.types.GenerationConfig(temperature=0.0))  # Adjust the temperature as needed
 
 model = genai.GenerativeModel('gemini-2.0-flash-exp', generation_config = genai.types.GenerationConfig(
     temperature=0.0  # Adjust the temperature as needed
@@ -297,15 +294,6 @@ Example:
         return {"news": [], "today": today}
 
 
-def quantum_node(state: AgentState):
-    topic = state['topic']
-    article_summary = state['news']
-    background = state['background']
-    prompt=f"""{quantum_prompt} This is the topic: {topic}\n\n This is the article summary: {article_summary    }\n\n This is the background: {background}""" 
-    response = model_2.generate_content(prompt)
-    quantum_analysis = response.text
-    print(quantum_analysis)
-    return {'quantum_analysis': quantum_analysis}
 
 def entropy_node(state: AgentState):
     topic = state['topic']
@@ -318,35 +306,39 @@ def entropy_node(state: AgentState):
     This is the background: {background}
     """
     response = model_2.generate_content(prompt)
-    entropy_analysis = response.text
-    print(entropy_analysis)
-    return {'entropy_analysis': entropy_analysis}
 
-def recursive_exploration_node(state: AgentState):
-    topic = state['topic']
-    article_summary = state['news']
-    background = state['background']
-    prompt=f"""{recursive_exploration_prompt} This is the topic: {topic}\n\n This is the article summary: {article_summary    }\n\n This is the background: {background}""" 
+    # Extract the final analysis text using the function
+    final_analysis = get_second_text_part_from_object(response)
+    print(final_analysis)
 
-    response = model_2.generate_content(prompt)
-    recursive_exploration = response.text
-    print(recursive_exploration)
-    return {'recursive_exploration_analysis': recursive_exploration}
+    return {'entropy_analysis': final_analysis}
 
-def dimensional_trascendence_node(state: AgentState):
-    topic = state['topic']
-    article_summary = state['news']
-    background = state['background']
-    prompt = f"""
-    {dimensional_transcendence_prompt}
-    This is the topic: {topic}
-    This is the article summary: {article_summary}
-    This is the background: {background}
+
+def get_second_text_part_from_object(response_obj):
     """
-    response = model_2.generate_content(prompt)
-    dimensional_trascendence = response.text
-    print(dimensional_trascendence)
-    return {'dimensional_trascendence_analysis': dimensional_trascendence}
+    Extract the second text chunk from the first candidate,
+    assuming we have something like:
+    
+    response_obj.candidates[0].content.parts == [
+       {"text": "FIRST PART"},
+       {"text": "SECOND PART"}  # what we want
+    ]
+    """
+    # Access the list of candidates (public attribute)
+    cands = response_obj.candidates
+    if not cands:
+        return "No candidates found."
+    
+    # Each candidate has a .content, which has .parts
+    parts = cands[0].content.parts
+    if len(parts) < 2:
+        # If there's only one part or none, just gracefully handle it
+        return parts[0].text if parts else "No parts found."
+    
+    # Otherwise, return the second part
+    return parts[1].text
+
+
 
 def actor_mapping_node(state: AgentState):
     topic = state['topic']
@@ -357,87 +349,57 @@ def actor_mapping_node(state: AgentState):
     This is the topic: {topic}
     This is the article summary: {article_summary}
     This is the background: {background}
-    """
+"""
     response = model_2.generate_content(prompt)
-    actor_mapping = response.text
-    print(actor_mapping)
-    return {'actor_mapping_analysis': actor_mapping}
+
+    # Extract the final analysis text using the function
+    final_analysis = get_second_text_part_from_object(response)
+    print(final_analysis)
+
+    return {'actor_mapping_analysis': final_analysis}
 
 def complex_systems_node(state: AgentState):
     topic = state['topic']
     article_summary = state['news']
     background = state['background']
+    actor_map=state['actor_mapping_analysis']
     prompt = f"""
     {complex_systems_prompt}
     This is the topic: {topic}
     This is the article summary: {article_summary}
     This is the background: {background}
+    This is the actor mapping: {actor_map}
+
     """
     response = model_2.generate_content(prompt)
-    complex_system_analysis = response.text
-    print(complex_system_analysis)
-    return {'complex_system_analysis': complex_system_analysis}
 
-def analyst_node(state: AgentState):
-    # Extract data from the shared state
+    # Extract the final analysis text using the function
+    final_analysis = get_second_text_part_from_object(response)
+    print(final_analysis)
+
+    return {'complex_system_analysis': final_analysis}
+
+def game_theory_node(state: AgentState):
     topic = state['topic']
     article_summary = state['news']
     background = state['background']
-    areas_for_improvement = state['areas_for_improvement']
-    previous_analysis = state.get('final_analysis', '')
-    today = state['today']
-    complex_system_analysis = state['complex_system_analysis']
-    quantum_analysis = state['quantum_analysis']
-    entropy_analysis = state['entropy_analysis']
-    recursive_exploration_analysis = state['recursive_exploration_analysis']
-    dimensional_trascendence_analysis = state['dimensional_trascendence_analysis']
-    actor_mapping_analysis = state['actor_mapping_analysis']
-
+    actor_map=state['actor_mapping_analysis']
+    complex_sys=state['complex_system_analysis']
     prompt = f"""
-    {analyst_prompt}
-    **Topic**:
-    {topic}
-    
-    **Today's date**
-    {today}
-
-    **Background**:
-    {background}
-    
-    **News / Article Summaries**:
-    {article_summary}
-
-    **Complex Systems Analysis**:
-    {complex_system_analysis}
-
-    **Quantum Analysis**:
-    {quantum_analysis}
-
-    **Entropy Analysis**:
-    {entropy_analysis}
-
-    **Recursive Exploration Analysis**:
-    {recursive_exploration_analysis}
-
-    **Dimensional Transcendence Analysis**:
-    {dimensional_trascendence_analysis}
-
-    **Actor Mapping Analysis**:
-    {actor_mapping_analysis}
-
-    **Previous Draft Analysis (if any)**:
-    {previous_analysis}
-
-    **Critique to the previous draft analysis (if any)**:
-    {areas_for_improvement}
-
-    Please produce the final, unified analysis now, integrating all the content above.
+    {game_theory_prompt}
+    This is the topic: {topic}
+    This is the article summary: {article_summary}
+    This is the background: {background}
+    This is the actor mapping: {actor_map}
+    This is the complex system analysis: {complex_sys}
     """
-    response = model.generate_content(prompt)
-    final_analysis = response.text
+    response = model_2.generate_content(prompt)
+
+    # Extract the final analysis text using the function
+    final_analysis = get_second_text_part_from_object(response)
     print(final_analysis)
 
-    return {'final_analysis': final_analysis}
+    return {'game_theory_analysis': final_analysis}
 
 def unified_analysis_node(state: AgentState):
     topic = state["topic"]
@@ -447,11 +409,9 @@ def unified_analysis_node(state: AgentState):
     areas_for_improvement = state["areas_for_improvement"]
     background = state["background"]
     complex_system_analysis = state["complex_system_analysis"]
-    quantum_analysis = state["quantum_analysis"]
     entropy_analysis = state["entropy_analysis"]
-    recursive_exploration_analysis = state["recursive_exploration_analysis"]
-    dimensional_trascendence_analysis = state["dimensional_trascendence_analysis"]
     actor_mapping_analysis = state["actor_mapping_analysis"]
+    game_theory_analysis = state["game_theory_analysis"]
 
     prompt = f"""
     {analyst_prompt}
@@ -471,20 +431,14 @@ def unified_analysis_node(state: AgentState):
     **Complex Systems Analysis**:
     {complex_system_analysis}
 
-    **Quantum Analysis**:
-    {quantum_analysis}
-
     **Entropy Analysis**:
     {entropy_analysis}
 
-    **Recursive Exploration Analysis**:
-    {recursive_exploration_analysis}
-
-    **Dimensional Transcendence Analysis**:
-    {dimensional_trascendence_analysis}
-
     **Actor Mapping Analysis**:
     {actor_mapping_analysis}
+
+    **Game Theory Analysis**:
+    {game_theory_analysis}
 
     **Previous Draft Analysis (if any)**:
     {previous_analysis}
@@ -520,7 +474,7 @@ def revision_node(state: "AgentState") -> Dict:
     Evaluates the unified analysis, determines if further revisions are needed,
     and generates research queries if necessary.
     """
-    MAX_REVISIONS = 3  # Maximum number of revisions allowed
+    MAX_REVISIONS = 2  # Maximum number of revisions allowed
     unified_analysis = state["final_analysis"]
     current_revision_count = state["revision_count"]
     background = state["background"]
@@ -543,53 +497,71 @@ def revision_node(state: "AgentState") -> Dict:
     {background}
 
     **Unified Analysis:**
-
     {unified_analysis}
 
     **Evaluation Criteria:**
 
-    1.  **Clarity and Coherence:** Is the analysis well-structured, easy to understand, and logically sound?
-    2.  **Depth of Analysis:** Does the analysis demonstrate a deep understanding of the topic, going beyond superficial observations?
-    3.  **Integration of Frameworks:** Does the analysis effectively integrate the different analytical frameworks (complex systems, quantum, etc.)?
-    4.  **Evidence and Support:** Are claims supported by evidence from the news articles, the background information, and the specialized analyses?
-    5.  **Originality:** Does the analysis offer any new or unique insights?
-    6.  **Potential Future Scenarios:** Are the potential future scenarios well-reasoned and plausible?
+    1.  **Clarity and Coherence:** 
+        - Is the analysis well-structured, easy to understand, and logically sound?
+        - Do paragraphs flow in a logical order, building upon each other without abrupt gaps or leaps?
+
+    2.  **Depth of Analysis:** 
+        - Does the analysis go beyond superficial observations and offer substantive insight into the topic?
+        - Does it explore underlying causes, implications, and potential contradictions?
+
+    3.  **Integration of Frameworks:** 
+        - Does the analysis effectively integrate the different analytical frameworks (e.g., complex systems, game theory, entropy, actor mapping)?
+        - Are the frameworks used in a complementary way rather than in isolation?
+
+    4.  **Evidence and Support:** 
+        - Are the claims supported by evidence from the provided background, news references, or specialized analyses?
+        - Does the analysis demonstrate accurate cross-referencing of sources and data points?
+        - Are there any instances where assertions appear unfounded or contradictory?
+
+    5.  **Originality and Insightfulness:** 
+        - Does the analysis offer new or unique insights into the situation?
+        - Does it highlight any nuanced viewpoints or unexpected connections among actors or factors?
+
+    6.  **Balance and Completeness:** 
+        - Does the analysis address all major facets of the situation without obvious omission?
+        - Are multiple perspectives (e.g., political, economic, social) represented fairly?
+
+    7.  **Potential Future Scenarios:** 
+        - Are the potential future scenarios well-reasoned, plausible, and connected back to the evidence and frameworks presented?
+        - Do they meaningfully extend from the current dynamics outlined in the analysis?
 
     **Based on your evaluation, answer the following questions:**
 
-    1.  **Revision Needed (YES/NO):** Does this analysis require further revision or refinement to improve its quality and completeness?
-    2.  **Areas for Improvement:** Briefly describe the specific areas where the analysis is lacking or could be improved (e.g., "The analysis lacks depth in the actor mapping section," "The potential future scenarios are not well-supported").
-    3.  **Research Queries:** If you answered YES to question 1, generate 2-3 specific research queries that could be used to gather more information and address the identified weaknesses.
+    1.  **Revision Needed (YES/NO):** 
+        - Does this analysis require further revision or refinement to improve its quality and completeness?
+
+    2.  **Areas for Improvement:** 
+        - Briefly describe the specific areas where the analysis is lacking or could be improved 
+          (e.g., "The analysis lacks depth in integrating game theory," or "The future scenarios are vague and not linked to the actor mapping").
+
+    3.  **Research Queries (Only if You Answered YES Above):** 
+        - Generate 2-3 precise and actionable research queries that would help address the identified weaknesses. 
+        - Formulate each query so that it is specific enough to yield highly relevant results from a search engine (like Google Serper).
 
     **Guidelines for Research Query Generation:**
 
-    *   **Specificity:** Ensure queries are precise enough to return highly relevant results from a search engine (like Google Serper).
-    *   **Comprehensiveness:** Design queries to capture multiple aspects of the area for improvement.
-    *   **Diversity:** Avoid overlapping queries; focus on varying dimensions of the needed information.
-    *   **Actionable:** Formulate queries that are likely to yield concrete and useful information for improving the analysis.
+    *   **Specificity:** 
+        - Ensure queries are focused and likely to retrieve pertinent information.
+    *   **Comprehensiveness:** 
+        - Capture various dimensions of the weakness (e.g., historical data, current developments, expert viewpoints).
+    *   **Diversity:** 
+        - Avoid overlapping queries. Instead, target different angles of the area that needs improvement.
+    *   **Actionable:** 
+        - Phrase queries such that their answers would directly strengthen the relevant sections of the analysis.
 
-    **Example Research Queries (Illustrative and Diversified):**
+    **Example Research Queries (For Illustration Only):**
 
-    *   **Scenario:** Analysis of the impact of social media on political polarization.
-        *   **Area for Improvement:** "The analysis lacks a detailed examination of the role of specific social media platforms."
+    *   **Scenario:** Evaluating the influence of corporate lobbying on climate policy.
+        *   **Area for Improvement:** "Insufficient detail on how specific corporate lobbying efforts have shaped legislation."
         *   **Research Queries:**
-            *   "Twitter's role in spreading political misinformation 2022-2023"
-            *   "Facebook algorithm changes AND political polarization"
-            *   "Comparative analysis of social media platform policies on political content"
-
-    *   **Scenario:** Analysis of the future of cryptocurrencies.
-        *   **Area for Improvement:** "The analysis doesn't adequately address the potential impact of regulatory changes."
-        *   **Research Queries:**
-            *   "Proposed cryptocurrency regulations in the US and EU"
-            *   "Impact of SEC v. Ripple Labs decision on crypto market"
-            *   "Central bank digital currencies AND cryptocurrency adoption"
-
-    *   **Scenario:** Analysis of supply chain disruptions caused by climate change.
-        *   **Area for Improvement:** "The analysis needs more specific examples of companies adapting to climate-related supply chain risks."
-        *   **Research Queries:**
-            *   "Case studies of companies adapting supply chains to climate change"
-            *   "Reshoring initiatives AND climate change resilience"
-            *   "Impact of extreme weather events on global supply chains 2023"
+            - "Case studies of fossil fuel lobby influence on U.S. climate policy in 2022"
+            - "Corporate lobbying disclosure data AND climate legislation 2021-2023"
+            - "Influence of renewable energy lobby vs fossil fuel lobby in EU climate directives"
 
     **Output Format (JSON)**:
     {{
@@ -600,7 +572,8 @@ def revision_node(state: "AgentState") -> Dict:
             "Query 2"
         ]
     }}
-    """
+"""
+
 
     try:
         response = model.generate_content(
@@ -687,11 +660,9 @@ def humanitarian_impact_node(state: AgentState) -> Dict:
     background = state["background"]
     today = state["today"]
     complex_system_analysis = state.get("complex_system_analysis", "")
-    quantum_analysis = state.get("quantum_analysis", "")
     entropy_analysis = state.get("entropy_analysis", "")
-    recursive_exploration_analysis = state.get("recursive_exploration_analysis", "")
-    dimensional_trascendence_analysis = state.get("dimensional_trascendence_analysis", "")
     actor_mapping_analysis = state.get("actor_mapping_analysis", "")
+    game_theory_analysis = state.get("game_theory_analysis", "")
 
     # --- Generate research queries ---
     research_query_prompt = f"""
@@ -711,11 +682,9 @@ def humanitarian_impact_node(state: AgentState) -> Dict:
     **Analytical Frameworks:**
     (Consider the insights from these frameworks when formulating your queries)
     Complex Systems Analysis: {complex_system_analysis}
-    Quantum Analysis: {quantum_analysis}
     Entropy Analysis: {entropy_analysis}
-    Recursive Exploration Analysis: {recursive_exploration_analysis}
-    Dimensional Transcendence Analysis: {dimensional_trascendence_analysis}
     Actor Mapping Analysis: {actor_mapping_analysis}
+    Game Theory Analysis: {game_theory_analysis}
 
     **Instructions:**
 
@@ -814,6 +783,7 @@ Example:
     attention to food security concerns and provide a detailed assessment of the potential 
     impacts on food production, distribution, access, and prices.**
 
+
     **Topic:** {topic}
 
     **Current Analysis:**
@@ -824,10 +794,7 @@ Example:
 
     **Specialized Analyses:**
     Complex Systems Analysis: {complex_system_analysis}
-    Quantum Analysis: {quantum_analysis}
     Entropy Analysis: {entropy_analysis}
-    Recursive Exploration Analysis: {recursive_exploration_analysis}
-    Dimensional Transcendence Analysis: {dimensional_trascendence_analysis}
     Actor Mapping Analysis: {actor_mapping_analysis}
 
     **Research:**
@@ -870,6 +837,8 @@ Example:
     **Structure your analysis into clearly defined sections with headings.**
 
     **Your analysis should be insightful, well-structured, evidence-based, and approximately 800-1000 words.**
+    
+    **Do not add any introductory statement like "Here is the actor mapping analysis...", just output the requested analysis.**
     """
 
     response = model.generate_content(humanitarian_impact_prompt)
@@ -883,199 +852,3 @@ Example:
     }
 
 
-def economic_impact_node(state: "AgentState") -> Dict:
-    """
-    Performs research on and analyzes the microeconomic and macroeconomic impacts,
-    focusing on the local economy, vulnerable regions, and overall macroeconomic situation.
-    """
-    topic = state["topic"]
-    final_analysis = state["final_analysis"]
-    background = state["background"]
-    today = state["today"]
-
-    complex_system_analysis = state.get("complex_system_analysis", "")
-    quantum_analysis = state.get("quantum_analysis", "")
-    entropy_analysis = state.get("entropy_analysis", "")
-    recursive_exploration_analysis = state.get("recursive_exploration_analysis", "")
-    dimensional_trascendence_analysis = state.get("dimensional_trascendence_analysis", "")
-    actor_mapping_analysis = state.get("actor_mapping_analysis", "")
-
-    research_query_prompt = f"""
-    You are an expert economist with extensive knowledge of both microeconomic and macroeconomic analysis. 
-    You are tasked with analyzing the economic impact of the following issue:
-
-    **Topic:** {topic}
-
-    **Current Analysis:**
-    {final_analysis}
-
-    **Background:**
-    {background}
-
-    **Analytical Frameworks:**
-    (Consider the insights from these frameworks when formulating your queries)
-    Complex Systems Analysis: {complex_system_analysis}
-    Quantum Analysis: {quantum_analysis}
-    Entropy Analysis: {entropy_analysis}
-    Recursive Exploration Analysis: {recursive_exploration_analysis}
-    Dimensional Transcendence Analysis: {dimensional_trascendence_analysis}
-    Actor Mapping Analysis: {actor_mapping_analysis}
-
-    **Instructions:**
-
-    1.  **Identify Key Economic Aspects:** Based on the topic and provided analyses, identify 3-4 key aspects that are most likely to have significant economic ramifications. Consider:
-        *   **Local Economic Impact:** How might local businesses, employment, and consumer behavior be affected?
-        *   **Vulnerable Sectors:** Which economic sectors are likely to be most impacted?
-        *   **Regional Effects:** Are there specific geographic regions that may experience more severe economic consequences?
-        *   **Trade and Investment:** How might international trade flows and investment patterns be affected?
-        *   **Market Dynamics:** What are the potential effects on prices, supply chains, and market competition?
-        *   **Policy Implications:** What economic policy responses might be necessary or likely?
-
-    2.  **Formulate Research Queries:** Formulate up to 4 specific and targeted research queries that will help gather comprehensive economic data and analysis.
-        *   Use precise economic terminology and metrics.
-        *   Specify relevant geographic regions, especially vulnerable areas.
-        *   Focus on queries that are likely to yield concrete data, expert analyses, and diverse perspectives, particularly regarding the local and regional economic impacts.
-
-    **Output Format**:
-Only return valid JSON with two fields: "queries" (array of strings), and "recency_filter" (string).
-Do not include any markdown fences or extra text.
-
-Example:
-{{
-  "queries": ["query1", "query2"],
-  "recency_filter": "month"
-}}
-    """
-
-    try:
-        response = model_queries.generate_content(
-            research_query_prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json"
-            ),
-        )
-
-        # Attempt to parse the JSON response
-        try:
-            queries_data = Queries.model_validate_json(response.text)
-        except ValidationError as e:
-            print(f"Pydantic validation error: {e}")
-            # Attempt to fix the JSON string
-            try:
-                fixed_json_str = response.text.strip()
-                if fixed_json_str.startswith("```json"):
-                    fixed_json_str = fixed_json_str[7:]
-                if fixed_json_str.endswith("```"):
-                    fixed_json_str = fixed_json_str[:-3]
-                
-                # Attempt to parse the JSON string to a Python dictionary
-                data_dict = json.loads(fixed_json_str)
-
-                # Ensure the dictionary has the expected structure
-                if not isinstance(data_dict, dict) or "queries" not in data_dict or "recency_filter" not in data_dict:
-                    raise ValueError("JSON does not have the expected structure")
-                
-                queries_data = Queries(**data_dict)
-
-            except Exception as fix_error:
-                print(f"Error attempting to fix JSON: {fix_error}")
-                print(f"Failed to parse JSON: {response.text}")
-                return {
-                    "economic_impact_analysis": "",
-                    "news": state.get("news", [])
-                }
-
-        research_queries = queries_data.queries
-        recency_filter = queries_data.recency_filter or "month"
-        print(f"Research queries for economic impact: {research_queries}")
-
-    except Exception as e:
-        print(f"Error generating research queries: {e}")
-        research_queries = []
-        recency_filter = "month"
-
-    # --- Perform research ---
-    economic_news = []
-    for query in research_queries:
-        try:
-            response_text = news_search(query, recency_filter=recency_filter)
-            economic_news.append(response_text)
-        except Exception as e:
-            print(f"Error fetching news for query '{query}': {e}")
-
-    # Update the news in the state
-    news = state.get("news", [])
-    updated_news = news + economic_news
-
-    # --- Analyze the economic impact ---
-    economic_impact_prompt = f"""
-    You are an expert economist with extensive knowledge of both microeconomic and macroeconomic analysis. 
-    Analyze the economic impact of the following issue, integrating the provided 
-    background information, specialized analyses, and research findings.
-
-    **Topic:** {topic}
-
-    **Current Analysis:**
-    {final_analysis}
-
-    **Background:**
-    {background}
-
-    **Specialized Analyses:**
-    Complex Systems Analysis: {complex_system_analysis}
-    Quantum Analysis: {quantum_analysis}
-    Entropy Analysis: {entropy_analysis}
-    Recursive Exploration Analysis: {recursive_exploration_analysis}
-    Dimensional Transcendence Analysis: {dimensional_trascendence_analysis}
-    Actor Mapping Analysis: {actor_mapping_analysis}
-
-    **Research:**
-    {updated_news}
-
-    **Today's Date:** {today}
-
-    **Instructions:**
-
-    1.  **Local Economic Impacts:**
-        *   Analyze the potential impacts on local businesses, employment, and consumer behavior.
-        *   Consider factors such as local industries, employment rates, housing markets, and local government finances.
-        *   Identify any regions that might be particularly vulnerable to negative impacts.
-
-    2.  **Impacts on Vulnerable Sectors:**
-        *   Assess how the issue might disproportionately affect economically disadvantaged or vulnerable sectors.
-        *   Consider factors such as pre-existing economic disparities, dependence on specific industries, and limited access to resources.
-
-    3.  **Microeconomic Analysis:**
-        *   Analyze the potential impacts on specific industries, businesses, and consumers.
-        *   Consider factors such as supply chain disruptions, changes in production costs, price fluctuations, shifts in consumer demand, and impacts on employment.
-        *   Provide specific examples and, where possible, quantify the potential impacts using data or estimates.
-
-    4.  **Macroeconomic Analysis:**
-        *   Analyze the potential impacts on the broader economy, including GDP growth, inflation, unemployment, and trade.
-        *   Consider the implications for financial markets (e.g., stock markets, bond markets, exchange rates).
-        *   Evaluate potential government policy responses (e.g., fiscal stimulus, monetary policy adjustments, trade policies) and their likely consequences.
-
-    5.  **International Economic Implications:**
-        *   Analyze the potential impacts on international trade flows, global supply chains, and international financial stability.
-        *   Consider the implications for other countries or regions.
-
-    6.  **Long-Term Economic Consequences:**
-        *   Assess the potential long-term effects of the issue on economic growth, development, and structural changes in the economy (both globally and regionally).
-        *   Consider factors such as investment, innovation, technological advancements, and shifts in economic power.
-
-    **Structure your analysis into clearly defined sections with headings.**
-
-    **Do not add any introductory statement like "Okay, here's a detailed economic analysis...", just output the requested analysis.**
-
-    **Your analysis should be insightful, well-structured, evidence-based, and approximately 800-1000 words.**
-    """
-
-    response = model.generate_content(economic_impact_prompt)
-    economic_impact_analysis = response.text
-
-    print("Economic impact analysis generated.")
-
-    return {
-        "economic_impact_analysis": economic_impact_analysis,
-        "news": updated_news
-    }

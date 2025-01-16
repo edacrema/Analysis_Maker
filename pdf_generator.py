@@ -10,8 +10,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from nodes import AgentState
 import markdown
-from weasyprint import HTML, CSS
-from weasyprint.text.fonts import FontConfiguration
 
 def sanitize_filename(filename):
     """
@@ -24,284 +22,159 @@ def sanitize_filename(filename):
     # Limit length and trim
     return filename.strip('_')[:100]
 
-def markdown_to_html(text):
-    """Enhanced markdown to HTML conversion for better formatting"""
+def markdown_to_reportlab(text, style):
+    """Convert markdown text to reportlab paragraphs"""
     if not text:
-        return ""
+        return []
     
-    # Normalize line endings
-    text = text.replace('\r\n', '\n')
+    paragraphs = []
+    lines = text.split('\n')
+    current_paragraph = []
     
-    # Split text into paragraphs
-    paragraphs = text.split('\n\n')
-    processed_paragraphs = []
-    
-    for para in paragraphs:
-        # Skip empty paragraphs
-        if not para.strip():
-            continue
-            
-        # Check if this paragraph is a list
-        lines = para.split('\n')
-        is_list = all(line.strip().startswith('- ') for line in lines if line.strip())
-        
-        if is_list:
-            # Handle bullet list
-            list_items = []
-            for line in lines:
-                if line.strip():
-                    # Remove the bullet point and create a proper list item
-                    content = line.strip()[2:]  # Remove '- ' from start
-                    # Convert any inline formatting
-                    content = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', content)
-                    content = re.sub(r'\*(.*?)\*', r'<i>\1</i>', content)
-                    list_items.append(f'<li>{content}</li>')
-            
-            # Join list items with proper list formatting
-            processed_para = '<ul>' + ''.join(list_items) + '</ul>'
-        else:
-            # Handle regular paragraph
-            # Convert headers
-            if para.strip().startswith('# '):
-                processed_para = f"<h1>{para.strip()[2:]}</h1>"
-            elif para.strip().startswith('## '):
-                processed_para = f"<h2>{para.strip()[3:]}</h2>"
-            elif para.strip().startswith('### '):
-                processed_para = f"<h3>{para.strip()[4:]}</h3>"
+    for line in lines:
+        if line.strip():
+            # Handle headers
+            if line.startswith('# '):
+                if current_paragraph:
+                    paragraphs.append(Paragraph(''.join(current_paragraph), style['Normal']))
+                    current_paragraph = []
+                paragraphs.append(Paragraph(line[2:], style['Heading1']))
+            elif line.startswith('## '):
+                if current_paragraph:
+                    paragraphs.append(Paragraph(''.join(current_paragraph), style['Normal']))
+                    current_paragraph = []
+                paragraphs.append(Paragraph(line[3:], style['Heading2']))
+            elif line.startswith('### '):
+                if current_paragraph:
+                    paragraphs.append(Paragraph(''.join(current_paragraph), style['Normal']))
+                    current_paragraph = []
+                paragraphs.append(Paragraph(line[4:], style['Heading3']))
+            # Handle bullet points
+            elif line.strip().startswith('- '):
+                if current_paragraph:
+                    paragraphs.append(Paragraph(''.join(current_paragraph), style['Normal']))
+                    current_paragraph = []
+                paragraphs.append(Paragraph('• ' + line[2:], style['Bullet']))
             else:
-                # Convert bold and italic
-                para = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', para)
-                para = re.sub(r'\*(.*?)\*', r'<i>\1</i>', para)
-                # Preserve line breaks within paragraphs
-                para = re.sub(r'([^\n])\n([^\n])', r'\1<br/>\2', para)
-                processed_para = f"<p>{para}</p>"
-        
-        if processed_para:  # Only append if we have content
-            processed_paragraphs.append(processed_para)
+                current_paragraph.append(line + ' ')
+        else:
+            if current_paragraph:
+                paragraphs.append(Paragraph(''.join(current_paragraph), style['Normal']))
+                current_paragraph = []
+                paragraphs.append(Spacer(1, 12))
     
-    # Join all processed paragraphs
-    return '\n'.join(processed_paragraphs)
+    if current_paragraph:
+        paragraphs.append(Paragraph(''.join(current_paragraph), style['Normal']))
+    
+    return paragraphs
 
 def generate_analysis_pdf(state: "AgentState", output_dir="Reports"):
-    """
-    Generate a PDF containing all analyses from the state.
-    First generates a markdown file, then converts it to PDF.
-    """
-    # First generate the markdown file
-    markdown_path = generate_markdown_report(state, output_dir)
-    
-    # Then convert it to PDF
-    pdf_path = markdown_to_pdf(markdown_path, output_dir)
-    
-    return pdf_path
-
-def generate_markdown_report(state: AgentState, output_dir="Reports") -> str:
-    """
-    Generate a markdown report from the agent state and save it to a file.
-    Returns the path to the generated markdown file.
-    """
+    """Generate a PDF containing all analyses from the state."""
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
     # Convert AgentState to dict if needed
     state_dict = state if isinstance(state, dict) else state.model_dump()
     
-    # Generate filename with date and topic
+    # Generate filename
     date_str = datetime.strptime(state_dict['today'], "%Y-%m-%d").strftime("%Y%m%d")
     topic_safe = sanitize_filename(state_dict['topic'])
-    filename = f"{date_str}_{topic_safe}.md"
+    filename = f"{date_str}_{topic_safe}.pdf"
     output_path = os.path.join(output_dir, filename)
     
     # If file exists, add a counter
     counter = 1
-    base_path = output_path[:-3]  # Remove .md
+    base_path = output_path[:-4]  # Remove .pdf
     while os.path.exists(output_path):
-        output_path = f"{base_path}_{counter}.md"
+        output_path = f"{base_path}_{counter}.pdf"
         counter += 1
 
-    # Build the markdown content
-    markdown_content = []
+    # Create the PDF document
+    doc = SimpleDocTemplate(
+        output_path,
+        pagesize=A4,
+        rightMargin=72,
+        leftMargin=72,
+        topMargin=72,
+        bottomMargin=72
+    )
+
+    # Get styles
+    styles = getSampleStyleSheet()
     
-    # Title and date
-    markdown_content.append("# Comprehensive Analysis Report")
-    markdown_content.append(f"Generated on: {state_dict['today']}\n")
+    # Only add the Bullet style if it doesn't exist
+    if 'Bullet' not in styles:
+        styles.add(ParagraphStyle(
+            name='Bullet',
+            parent=styles['Normal'],
+            leftIndent=20,
+            spaceAfter=5
+        ))
+
+    # Build the content
+    content = []
+    
+    # Title
+    content.append(Paragraph("Comprehensive Analysis Report", styles['Title']))
+    content.append(Spacer(1, 12))
+    content.append(Paragraph(f"Generated on: {state_dict['today']}", styles['Normal']))
+    content.append(Spacer(1, 24))
     
     # Topic
-    markdown_content.append("# Topic of Analysis")
-    markdown_content.append(state_dict['topic'] + "\n")
+    content.append(Paragraph("Topic of Analysis", styles['Heading1']))
+    content.append(Paragraph(state_dict['topic'], styles['Normal']))
+    content.append(Spacer(1, 24))
 
     # 1. Executive Summary
-    markdown_content.append("# 1. Executive Summary")
-    markdown_content.append(state_dict.get('final_analysis', '') + "\n")
+    content.append(Paragraph("1. Executive Summary", styles['Heading1']))
+    content.extend(markdown_to_reportlab(state_dict.get('final_analysis', ''), styles))
+    content.append(Spacer(1, 24))
 
-    # 2. Impact Analyses
-    markdown_content.append("# 2. Impact Analyses")
-    
-    markdown_content.append("## 2.1 Economic Impact Analysis")
-    markdown_content.append(state_dict.get('economic_impact_analysis', '') + "\n")
-    
-    markdown_content.append("## 2.2 Humanitarian Impact Analysis")
-    markdown_content.append(state_dict.get('humanitarian_impact_analysis', '') + "\n")
+    # 2. Impact Analysis
+    content.append(Paragraph("2. Impact Analysis", styles['Heading1']))
+    content.append(Paragraph("2.1 Humanitarian Impact Analysis", styles['Heading2']))
+    content.extend(markdown_to_reportlab(state_dict.get('humanitarian_impact_analysis', ''), styles))
+    content.append(Spacer(1, 24))
 
     # 3. Background Information
-    markdown_content.append("# 3. Background Information")
+    content.append(Paragraph("3. Background Information", styles['Heading1']))
     if isinstance(state_dict.get('background'), list):
         background_text = "\n\n".join(state_dict['background'])
     else:
         background_text = str(state_dict.get('background', ''))
-    markdown_content.append(background_text + "\n")
+    content.extend(markdown_to_reportlab(background_text, styles))
+    content.append(Spacer(1, 24))
 
-    # 4. Mathematical and Systems Analyses
-    markdown_content.append("# 4. Mathematical and Systems Analyses")
+    # 4. Systems and Strategic Analyses
+    content.append(Paragraph("4. Systems and Strategic Analyses", styles['Heading1']))
     
-    markdown_content.append("## 4.1 Complex Systems Analysis")
-    markdown_content.append(state_dict.get('complex_system_analysis', '') + "\n")
+    content.append(Paragraph("4.1 Complex Systems Analysis", styles['Heading2']))
+    content.extend(markdown_to_reportlab(state_dict.get('complex_system_analysis', ''), styles))
+    content.append(Spacer(1, 12))
     
-    markdown_content.append("## 4.2 Quantum Analysis")
-    markdown_content.append(state_dict.get('quantum_analysis', '') + "\n")
+    content.append(Paragraph("4.2 Entropy Analysis", styles['Heading2']))
+    content.extend(markdown_to_reportlab(state_dict.get('entropy_analysis', ''), styles))
+    content.append(Spacer(1, 12))
     
-    markdown_content.append("## 4.3 Entropy Analysis")
-    markdown_content.append(state_dict.get('entropy_analysis', '') + "\n")
+    content.append(Paragraph("4.3 Actor Mapping Analysis", styles['Heading2']))
+    content.extend(markdown_to_reportlab(state_dict.get('actor_mapping_analysis', ''), styles))
+    content.append(Spacer(1, 12))
     
-    markdown_content.append("## 4.4 Recursive Exploration Analysis")
-    markdown_content.append(state_dict.get('recursive_exploration_analysis', '') + "\n")
-    
-    markdown_content.append("## 4.5 Dimensional Trascendence Analysis")
-    markdown_content.append(state_dict.get('dimensional_trascendence_analysis', '') + "\n")
-    
-    markdown_content.append("## 4.6 Actor Mapping Analysis")
-    markdown_content.append(state_dict.get('actor_mapping_analysis', '') + "\n")
+    content.append(Paragraph("4.4 Game Theory Analysis", styles['Heading2']))
+    content.extend(markdown_to_reportlab(state_dict.get('game_theory_analysis', ''), styles))
+    content.append(Spacer(1, 24))
 
     # Annex
-    markdown_content.append("# Annex: News and Current Events")
-    markdown_content.append("This section contains relevant news articles and current events related to the analysis.\n")
+    content.append(Paragraph("Annex: News and Current Events", styles['Heading1']))
+    content.append(Paragraph("This section contains relevant news articles and current events related to the analysis.", styles['Normal']))
+    content.append(Spacer(1, 12))
     if isinstance(state_dict.get('news'), list):
         news_text = "\n\n".join(state_dict['news'])
     else:
         news_text = str(state_dict.get('news', ''))
-    markdown_content.append(news_text)
+    content.extend(markdown_to_reportlab(news_text, styles))
 
-    # Write the markdown content to file
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(markdown_content))
+    # Build the PDF
+    doc.build(content)
     
     return output_path
-
-def markdown_to_pdf(markdown_path: str, output_dir="Reports") -> str:
-    """
-    Convert a markdown file to PDF using markdown -> HTML -> PDF pipeline.
-    Returns the path to the generated PDF file.
-    """
-    # Read markdown content
-    with open(markdown_path, 'r', encoding='utf-8') as f:
-        markdown_content = f.read()
-    
-    # Convert markdown to HTML
-    html_content = markdown.markdown(
-        markdown_content,
-        extensions=['extra', 'smarty', 'tables']  # Add more extensions as needed
-    )
-    
-    # Add CSS styling
-    css = CSS(string='''
-        @page {
-            margin: 1in;
-            size: A4;
-            @top-right {
-                content: counter(page);
-            }
-        }
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            max-width: 100%;
-            margin: 0;
-            padding: 0;
-        }
-        h1 {
-            font-size: 24px;
-            color: #2c3e50;
-            margin-top: 2em;
-            margin-bottom: 1em;
-            page-break-before: always;
-        }
-        h1:first-of-type {
-            page-break-before: avoid;
-        }
-        h2 {
-            font-size: 20px;
-            color: #34495e;
-            margin-top: 1.5em;
-            margin-bottom: 0.8em;
-        }
-        p {
-            margin-bottom: 1em;
-            text-align: justify;
-        }
-        ul, ol {
-            margin-bottom: 1em;
-            padding-left: 2em;
-        }
-        li {
-            margin-bottom: 0.5em;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 1em;
-        }
-        th, td {
-            padding: 8px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        th {
-            background-color: #f5f5f5;
-        }
-        blockquote {
-            margin: 1em 0;
-            padding-left: 1em;
-            border-left: 4px solid #ddd;
-            color: #666;
-        }
-        code {
-            font-family: monospace;
-            background-color: #f5f5f5;
-            padding: 2px 4px;
-            border-radius: 3px;
-        }
-        pre {
-            background-color: #f5f5f5;
-            padding: 1em;
-            border-radius: 3px;
-            overflow-x: auto;
-        }
-    ''')
-
-    # Wrap HTML content in a proper document structure
-    full_html = f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-    </head>
-    <body>
-        {html_content}
-    </body>
-    </html>
-    '''
-    
-    # Generate PDF filename
-    pdf_path = os.path.splitext(markdown_path)[0] + '.pdf'
-    
-    # Configure fonts
-    font_config = FontConfiguration()
-    
-    # Convert HTML to PDF
-    HTML(string=full_html).write_pdf(
-        pdf_path,
-        stylesheets=[css],
-        font_config=font_config
-    )
-    
-    return pdf_path
